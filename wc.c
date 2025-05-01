@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+
+bool mode_bytes = false;
+bool mode_chars = false;
+bool mode_lines = false;
+bool mode_mllen = false;
+bool mode_words = false;
 
 int intlen(int number) {
     // return ceil(log10(number+1));
@@ -11,9 +18,13 @@ int intlen(int number) {
 
 void wc(char **list, int count) {
     char buffer[BUFSIZ];
-    int clines = 0, cwords = 0, cbytes = 0;
+    int *lines = calloc(count, sizeof(int));
+    int *words = calloc(count, sizeof(int));
+    int *bytes = calloc(count, sizeof(int));
+    int *chars = calloc(count, sizeof(int));
+    int *mllen = calloc(count, sizeof(int));
+    int len;
     for (int i = 1; i < count; i++) {
-        int lines = 0, words = 0, bytes = 0;
         FILE *stream = fopen(list[i], "r");
         if (stream == NULL) {
             perror("Erro ao abrir o arquivo");
@@ -21,29 +32,76 @@ void wc(char **list, int count) {
         }
         while (fgets(buffer, BUFSIZ, stream) != NULL) {
             /* bytes     */
-            bytes += strlen(buffer);
+            if (mode_bytes)
+                bytes[i] += strlen(buffer);
             char *str;
             /* words     */
-            str = strdup(buffer);
-            while (strtok_r(str, " \t\n", &str) != NULL)
-                words++;
+            if (mode_words) {
+                str = strdup(buffer);
+                while (strtok_r(str, " \t\n", &str) != NULL)
+                    words[i]++;
+            }
+            /* max-line-length     */
+            if (mode_mllen) {
+                str = strdup(buffer);
+                len = strlen(str);
+                if (len > 0 && str[len-1] == '\n')
+                    str[len-1] = '\0';
+                len = strlen(str);
+                mllen[i] = mllen[i] > len ? mllen[i] : len;
+            }
             /* lines     */
-            lines++;
+            if (mode_lines)
+                lines[i]++;
+            /* chars
+            if (mode_chars)             */
         }
         if (strcmp(list[i], "/dev/stdin") == 0)
             list[i] = "";
-        clines += lines;
-        cwords += words;
-        cbytes += bytes;
-        printf("%d %d %d %s\n", lines, words, bytes, list[i]);
+        lines[0] += lines[i];
+        words[0] += words[i];
+        bytes[0] += bytes[i];
         fclose(stream);
     }
-    if (count > 2)
-        printf("%d %d %d total\n", clines, cwords, cbytes);
+
+    for (int i = 1; i < count; i++)
+        mllen[0] = mllen[0] > mllen[i] ? mllen[0] : mllen[i];
+    for (int i = 1; i < count; i++) {       /*  -l lines -w words -m chars -c bytes -L max-line-length   */
+        if (mode_lines)
+            printf("%*d ", intlen(lines[0]), lines[i]);
+        if (mode_words)
+            printf("%*d ", intlen(words[0]), words[i]);
+        if (mode_chars)
+            printf("%*d ", intlen(chars[0]), chars[i]);
+        if (mode_bytes)
+            printf("%*d ", intlen(bytes[0]), bytes[i]);
+        if (mode_mllen)
+            printf("%*d ", intlen(mllen[0]), mllen[i]);
+        printf("%s\n", list[i]);
+    }
+    if (count > 2) {                        /*  Print total */
+        if (mode_lines)
+            printf("%*d ", intlen(lines[0]), lines[0]);
+        if (mode_words)
+            printf("%*d ", intlen(words[0]), words[0]);
+        if (mode_chars)
+            printf("%*d ", intlen(chars[0]), chars[0]);
+        if (mode_bytes)
+            printf("%*d ", intlen(bytes[0]), bytes[0]);
+        if (mode_mllen)
+            printf("%*d ", intlen(mllen[0]), mllen[0]);
+        printf("total\n");
+    }
 }
 
 int main(int argc, char **argv) {
     char *list[2];
+    /* Default mode */
+    if ((mode_bytes || mode_chars || mode_lines || mode_mllen || mode_words) == 0) {
+        mode_bytes = true;
+        mode_lines = true;
+        mode_words = true;
+    }
     if (argc < 2) {
         list[1] = "/dev/stdin";
         wc(list, 2);
