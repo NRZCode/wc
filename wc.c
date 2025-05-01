@@ -104,6 +104,10 @@ void wc(char **list, int count) {
             printf("%*d ", intlen(items[TOTAL][MLLEN]), items[TOTAL][MLLEN]);
         printf("total\n");
     }
+    for (int i = 0; i < count; i++) {
+        free(items[i]);
+    }
+    free(items);
 }
 
 int main(int argc, char **argv) {
