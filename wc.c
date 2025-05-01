@@ -10,6 +10,9 @@ bool mode_lines = false;
 bool mode_mllen = false;
 bool mode_words = false;
 
+enum { TOTAL };
+enum { LINES, WORDS, CHARS, BYTES, MLLEN };
+
 int intlen(int number) {
     // return ceil(log10(number+1));
     char buffer[10];
@@ -42,13 +45,13 @@ void wc(char **list, int count) {
         while (fgets(buffer, BUFSIZ, stream) != NULL) {
             /* bytes     */
             if (mode_bytes)
-                items[i][3] += strlen(buffer);
+                items[i][BYTES] += strlen(buffer);
             char *str;
             /* words     */
             if (mode_words) {
                 str = strdup(buffer);
                 while (strtok_r(str, " \t\n", &str) != NULL)
-                    items[i][1]++;
+                    items[i][WORDS]++;
             }
             /* max-line-length     */
             if (mode_mllen) {
@@ -57,49 +60,48 @@ void wc(char **list, int count) {
                 if (len > 0 && str[len-1] == '\n')
                     str[len-1] = '\0';
                 len = strlen(str);
-                items[i][4] = items[i][4] > len ? items[i][4] : len;
+                items[i][MLLEN] = items[i][MLLEN] > len ? items[i][MLLEN] : len;
             }
             /* lines     */
             if (mode_lines)
-                items[i][0]++;
+                items[i][LINES]++;
             /* chars
             if (mode_chars)             */
         }
         if (strcmp(list[i], "/dev/stdin") == 0)
             list[i] = "";
-        items[0][0] += items[i][0];
-        items[0][1] += items[i][1];
-        items[0][3] += items[i][3];
+        items[TOTAL][LINES] += items[i][LINES];
+        items[TOTAL][WORDS] += items[i][WORDS];
+        items[TOTAL][BYTES] += items[i][BYTES];
         fclose(stream);
     }
-
     for (int i = 1; i < count; i++)
-        items[0][4] = items[0][4] > items[i][4] ? items[0][4] : items[i][4];
+        items[TOTAL][MLLEN] = items[TOTAL][MLLEN] > items[i][MLLEN] ? items[TOTAL][MLLEN] : items[i][MLLEN];
                                             /*  Ordem das colunas   */
     for (int i = 1; i < count; i++) {       /*  -l lines -w words -m chars -c bytes -L max-line-length   */
         if (mode_lines)
-            printf("%*d ", intlen(items[0][0]), items[i][0]);
+            printf("%*d ", intlen(items[TOTAL][LINES]), items[i][LINES]);
         if (mode_words)
-            printf("%*d ", intlen(items[0][1]), items[i][1]);
+            printf("%*d ", intlen(items[TOTAL][WORDS]), items[i][WORDS]);
         if (mode_chars)
-            printf("%*d ", intlen(items[0][2]), items[i][2]);
+            printf("%*d ", intlen(items[TOTAL][CHARS]), items[i][CHARS]);
         if (mode_bytes)
-            printf("%*d ", intlen(items[0][3]), items[i][3]);
+            printf("%*d ", intlen(items[TOTAL][BYTES]), items[i][BYTES]);
         if (mode_mllen)
-            printf("%*d ", intlen(items[0][4]), items[i][4]);
+            printf("%*d ", intlen(items[TOTAL][MLLEN]), items[i][MLLEN]);
         printf("%s\n", list[i]);
     }
     if (count > 2) {                        /*  Print total */
         if (mode_lines)
-            printf("%*d ", intlen(items[0][0]), items[0][0]);
+            printf("%*d ", intlen(items[TOTAL][LINES]), items[TOTAL][LINES]);
         if (mode_words)
-            printf("%*d ", intlen(items[0][1]), items[0][1]);
+            printf("%*d ", intlen(items[TOTAL][WORDS]), items[TOTAL][WORDS]);
         if (mode_chars)
-            printf("%*d ", intlen(items[0][2]), items[0][2]);
+            printf("%*d ", intlen(items[TOTAL][CHARS]), items[TOTAL][CHARS]);
         if (mode_bytes)
-            printf("%*d ", intlen(items[0][3]), items[0][3]);
+            printf("%*d ", intlen(items[TOTAL][BYTES]), items[TOTAL][BYTES]);
         if (mode_mllen)
-            printf("%*d ", intlen(items[0][4]), items[0][4]);
+            printf("%*d ", intlen(items[TOTAL][MLLEN]), items[TOTAL][MLLEN]);
         printf("total\n");
     }
 }
