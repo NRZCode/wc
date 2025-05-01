@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <getopt.h>
 #include <stdbool.h>
 
 bool mode_bytes = false;
@@ -18,6 +19,15 @@ int intlen(int number) {
 
 void wc(char **list, int count) {
     char buffer[BUFSIZ];
+    /**
+     *  Items = [
+     *      [0] => lines,
+     *      [1] => words,
+     *      [2] => chars,
+     *      [3] => bytes,
+     *      [4] => max-line-length
+     *  ]
+     */
     int *lines = calloc(count, sizeof(int));
     int *words = calloc(count, sizeof(int));
     int *bytes = calloc(count, sizeof(int));
@@ -95,7 +105,31 @@ void wc(char **list, int count) {
 }
 
 int main(int argc, char **argv) {
+    int opt;
     char *list[2];
+    // short_options = "c,    m,    l,    L,                                 w"
+    // long_options  = "bytes,chars,lines,max-line-length,total,help,version,words"
+    while ((opt = getopt(argc, argv, "cmlLw")) != -1) {
+        switch (opt) {
+            case 'c':
+                mode_bytes = true;
+                break;
+            case 'm':
+                mode_chars = true;
+                break;
+            case 'l':
+                mode_lines = true;
+                break;
+            case 'L':
+                mode_mllen = true;
+                break;
+            case 'w':
+                mode_words = true;
+                break;
+            default:
+                abort();
+        }
+    }
     /* Default mode */
     if ((mode_bytes || mode_chars || mode_lines || mode_mllen || mode_words) == 0) {
         mode_bytes = true;
@@ -106,7 +140,8 @@ int main(int argc, char **argv) {
         list[1] = "/dev/stdin";
         wc(list, 2);
     } else {
-        wc(argv, argc);
+        optind--;
+        wc(argv + optind, argc - optind);
     }
     return EXIT_SUCCESS;
 }
