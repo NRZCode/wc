@@ -1,8 +1,12 @@
+#include <getopt.h>
+#include <limits.h>
+#include <locale.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
-#include <stdbool.h>
+
+#define FIELDS 5
 
 bool mode_bytes = false;
 bool mode_chars = false;
@@ -21,7 +25,9 @@ int intlen(int number) {
 }
 
 void wc(char **list, int count) {
+    setlocale(LC_ALL, "pt_BR.UTF-8");
     char buffer[BUFSIZ];
+    size_t mblen;
     /**
      *  Items = [
      *      [0] => lines,
@@ -32,10 +38,17 @@ void wc(char **list, int count) {
      *  ]
      */
     int **items = malloc(count * sizeof(int *));
-    for (int i = 0; i < count; i++) {
-        items[i] = calloc(5, sizeof(int));
+    if (!items) {
+        perror("Erro na alocação de items");
+        exit(EXIT_FAILURE);
     }
-    int len;
+    for (int i = 0; i < count; i++) {
+        items[i] = calloc(FIELDS, sizeof(int));
+        if (!items[i]) {
+            perror("Erro na alocação de items[i]");
+            exit(EXIT_FAILURE);
+        }
+    }
     for (int i = 1; i < count; i++) {
         FILE *stream = fopen(list[i], "r");
         if (stream == NULL) {
@@ -53,26 +66,47 @@ void wc(char **list, int count) {
                 while (strtok_r(str, " \t\n", &str) != NULL)
                     items[i][WORDS]++;
             }
-            /* max-line-length     */
+            /* chars                        */
+            if (mode_chars) {
+                str = strdup(buffer);
+                mblen = mbstowcs(NULL, str, 0);
+                if (mblen == (size_t)-1) {
+                    perror("Erro ao converter multibyte");
+                    exit(EXIT_FAILURE);
+                }
+                if (mblen > INT_MAX) {
+                    fprintf(stderr, "Erro valor maior que INT_MAX!\n");
+                    exit(EXIT_FAILURE);
+                }
+                items[i][CHARS] += (int)mblen;
+            }
+            /* max-line-lenght              */
             if (mode_mllen) {
                 str = strdup(buffer);
-                len = strlen(str);
+                int len = strlen(str);
                 if (len > 0 && str[len-1] == '\n')
                     str[len-1] = '\0';
-                len = strlen(str);
-                items[i][MLLEN] = items[i][MLLEN] > len ? items[i][MLLEN] : len;
+                mblen = mbstowcs(NULL, str, 0);
+                if (mblen == (size_t)-1) {
+                    perror("Erro ao converter multibyte");
+                    exit(EXIT_FAILURE);
+                }
+                if (mblen > INT_MAX) {
+                    fprintf(stderr, "Erro valor maior que INT_MAX!\n");
+                    exit(EXIT_FAILURE);
+                }
+                items[i][MLLEN] = items[i][MLLEN] > (int)mblen ? items[i][MLLEN] : (int)mblen;
             }
             /* lines     */
             if (mode_lines)
                 items[i][LINES]++;
-            /* chars
-            if (mode_chars)             */
         }
         if (strcmp(list[i], "/dev/stdin") == 0)
             list[i] = "";
         items[TOTAL][LINES] += items[i][LINES];
         items[TOTAL][WORDS] += items[i][WORDS];
         items[TOTAL][BYTES] += items[i][BYTES];
+        items[TOTAL][CHARS] += items[i][CHARS];
         fclose(stream);
     }
     for (int i = 1; i < count; i++)
