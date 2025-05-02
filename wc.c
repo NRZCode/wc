@@ -14,6 +14,18 @@ bool mode_lines = false;
 bool mode_mllen = false;
 bool mode_words = false;
 
+static struct option long_options[] = {
+    {"bytes",           no_argument,        NULL, 'c'},
+    {"chars",           no_argument,        NULL, 'm'},
+    {"lines",           no_argument,        NULL, 'l'},
+    {"words",           no_argument,        NULL, 'w'},
+    {"max-line-length", no_argument,        NULL, 'L'},
+    {"total",           required_argument,  NULL, 1000},
+    {"help",            no_argument,        NULL, 'h'},
+    {"version",         no_argument,        NULL, 'v'},
+    {0, 0, 0, 0}
+};
+
 enum { TOTAL };
 enum { LINES, WORDS, CHARS, BYTES, MLLEN };
 
@@ -145,11 +157,15 @@ void wc(char **list, int count) {
 }
 
 int main(int argc, char **argv) {
-    int opt;
+    int opt, option_index;
     char *list[2];
+    char *mode_total;
     // short_options = "c,    m,    l,    L,                                 w"
     // long_options  = "bytes,chars,lines,max-line-length,total,help,version,words"
-    while ((opt = getopt(argc, argv, "cmlLw")) != -1) {
+    while ((opt = getopt_long(argc, argv, "cmlLwhv", long_options, &option_index)) != -1) {
+        if (opt == 0) {
+            continue;
+        }
         switch (opt) {
             case 'c':
                 mode_bytes = true;
@@ -166,12 +182,22 @@ int main(int argc, char **argv) {
             case 'w':
                 mode_words = true;
                 break;
+            case 1000:
+                // auto, always, only, never
+                mode_total = optarg;
+                break;
+            case 'h':
+                printf("help\n");
+                exit(EXIT_SUCCESS);
+            case 'v':
+                printf("version\n");
+                exit(EXIT_SUCCESS);
             default:
                 abort();
         }
     }
     /* Default mode */
-    if ((mode_bytes || mode_chars || mode_lines || mode_mllen || mode_words) == 0) {
+    if ((mode_bytes || mode_chars || mode_lines || mode_mllen || mode_words) == false) {
         mode_bytes = true;
         mode_lines = true;
         mode_words = true;
