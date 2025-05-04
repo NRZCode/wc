@@ -6,13 +6,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FIELDS 5
+#define VERSION "0.0.1"
+#define FIELDS  5
 
 bool mode_bytes = false;
 bool mode_chars = false;
 bool mode_lines = false;
 bool mode_mllen = false;
 bool mode_words = false;
+bool mode_total = false;
 
 static struct option long_options[] = {
     {"bytes",           no_argument,        NULL, 'c'},
@@ -36,10 +38,87 @@ int intlen(int number) {
     return strlen(buffer);
 }
 
+void count_lines(int *counter) {
+    /* lines     */
+    (*counter)++;
+}
+
+void count_bytes(char *line, int *counter) {
+    /* bytes     */
+    *counter += strlen(line);
+}
+
+void count_words(char *line, int *counter) {
+    /* words     */
+    char *str = strdup(line);
+    if (!str)
+        return;
+    while (strtok_r(str, " \t\n", &str) != NULL)
+        (*counter)++;
+}
+
+void count_chars(char *line, int *counter) {
+    /* chars                        */
+    char *str = strdup(line);
+    if (!str)
+        return;
+    size_t mblen = mbstowcs(NULL, str, 0);
+    if (mblen == (size_t)-1 || mblen > INT_MAX) {
+        perror("Erro ao converter multibyte");
+        exit(EXIT_FAILURE);
+    }
+    (*counter) += (int)mblen;
+}
+
+void count_max_line(char *line, int *max_counter) {
+    /* max-line-lenght              */
+    char *str = strdup(line);
+    if (!str)
+        return;
+    int len = strlen(str);
+    if (len > 0 && str[len-1] == '\n')
+        str[len-1] = '\0';
+    size_t mblen = mbstowcs(NULL, str, 0);
+    if (mblen == (size_t)-1 || mblen > INT_MAX) {
+        perror("Erro ao converter multibyte");
+        exit(EXIT_FAILURE);
+    }
+    *max_counter = *max_counter > (int)mblen ? *max_counter : (int)mblen;
+}
+
+void print_results(char **list, int **items, int count) {
+                                            /*  Ordem das colunas   */
+    for (int i = 1; i < count; i++) {       /*  -l lines -w words -m chars -c bytes -L max-line-length   */
+        if (mode_lines)
+            printf("%*d ", intlen(items[TOTAL][LINES]), items[i][LINES]);
+        if (mode_words)
+            printf("%*d ", intlen(items[TOTAL][WORDS]), items[i][WORDS]);
+        if (mode_chars)
+            printf("%*d ", intlen(items[TOTAL][CHARS]), items[i][CHARS]);
+        if (mode_bytes)
+            printf("%*d ", intlen(items[TOTAL][BYTES]), items[i][BYTES]);
+        if (mode_mllen)
+            printf("%*d ", intlen(items[TOTAL][MLLEN]), items[i][MLLEN]);
+        printf("%s\n", list[i]);
+    }
+    if (mode_total) {                        /*  Print total */
+        if (mode_lines)
+            printf("%*d ", intlen(items[TOTAL][LINES]), items[TOTAL][LINES]);
+        if (mode_words)
+            printf("%*d ", intlen(items[TOTAL][WORDS]), items[TOTAL][WORDS]);
+        if (mode_chars)
+            printf("%*d ", intlen(items[TOTAL][CHARS]), items[TOTAL][CHARS]);
+        if (mode_bytes)
+            printf("%*d ", intlen(items[TOTAL][BYTES]), items[TOTAL][BYTES]);
+        if (mode_mllen)
+            printf("%*d ", intlen(items[TOTAL][MLLEN]), items[TOTAL][MLLEN]);
+        printf("total\n");
+    }
+}
+
 void wc(char **list, int count) {
     setlocale(LC_ALL, "pt_BR.UTF-8");
     char buffer[BUFSIZ];
-    size_t mblen;
     /**
      *  Items = [
      *      [0] => lines,
@@ -68,50 +147,16 @@ void wc(char **list, int count) {
             exit(EXIT_FAILURE);
         }
         while (fgets(buffer, BUFSIZ, stream) != NULL) {
-            /* bytes     */
-            if (mode_bytes)
-                items[i][BYTES] += strlen(buffer);
-            char *str;
-            /* words     */
-            if (mode_words) {
-                str = strdup(buffer);
-                while (strtok_r(str, " \t\n", &str) != NULL)
-                    items[i][WORDS]++;
-            }
-            /* chars                        */
-            if (mode_chars) {
-                str = strdup(buffer);
-                mblen = mbstowcs(NULL, str, 0);
-                if (mblen == (size_t)-1) {
-                    perror("Erro ao converter multibyte");
-                    exit(EXIT_FAILURE);
-                }
-                if (mblen > INT_MAX) {
-                    fprintf(stderr, "Erro valor maior que INT_MAX!\n");
-                    exit(EXIT_FAILURE);
-                }
-                items[i][CHARS] += (int)mblen;
-            }
-            /* max-line-lenght              */
-            if (mode_mllen) {
-                str = strdup(buffer);
-                int len = strlen(str);
-                if (len > 0 && str[len-1] == '\n')
-                    str[len-1] = '\0';
-                mblen = mbstowcs(NULL, str, 0);
-                if (mblen == (size_t)-1) {
-                    perror("Erro ao converter multibyte");
-                    exit(EXIT_FAILURE);
-                }
-                if (mblen > INT_MAX) {
-                    fprintf(stderr, "Erro valor maior que INT_MAX!\n");
-                    exit(EXIT_FAILURE);
-                }
-                items[i][MLLEN] = items[i][MLLEN] > (int)mblen ? items[i][MLLEN] : (int)mblen;
-            }
-            /* lines     */
             if (mode_lines)
-                items[i][LINES]++;
+                count_lines(&items[i][LINES]);
+            if (mode_words)
+                count_words(buffer, &items[i][WORDS]);
+            if (mode_chars)
+                count_chars(buffer, &items[i][CHARS]);
+            if (mode_bytes)
+                count_bytes(buffer, &items[i][BYTES]);
+            if (mode_mllen)
+                count_max_line(buffer, &items[i][MLLEN]);
         }
         if (strcmp(list[i], "/dev/stdin") == 0)
             list[i] = "";
@@ -123,33 +168,7 @@ void wc(char **list, int count) {
     }
     for (int i = 1; i < count; i++)
         items[TOTAL][MLLEN] = items[TOTAL][MLLEN] > items[i][MLLEN] ? items[TOTAL][MLLEN] : items[i][MLLEN];
-                                            /*  Ordem das colunas   */
-    for (int i = 1; i < count; i++) {       /*  -l lines -w words -m chars -c bytes -L max-line-length   */
-        if (mode_lines)
-            printf("%*d ", intlen(items[TOTAL][LINES]), items[i][LINES]);
-        if (mode_words)
-            printf("%*d ", intlen(items[TOTAL][WORDS]), items[i][WORDS]);
-        if (mode_chars)
-            printf("%*d ", intlen(items[TOTAL][CHARS]), items[i][CHARS]);
-        if (mode_bytes)
-            printf("%*d ", intlen(items[TOTAL][BYTES]), items[i][BYTES]);
-        if (mode_mllen)
-            printf("%*d ", intlen(items[TOTAL][MLLEN]), items[i][MLLEN]);
-        printf("%s\n", list[i]);
-    }
-    if (count > 2) {                        /*  Print total */
-        if (mode_lines)
-            printf("%*d ", intlen(items[TOTAL][LINES]), items[TOTAL][LINES]);
-        if (mode_words)
-            printf("%*d ", intlen(items[TOTAL][WORDS]), items[TOTAL][WORDS]);
-        if (mode_chars)
-            printf("%*d ", intlen(items[TOTAL][CHARS]), items[TOTAL][CHARS]);
-        if (mode_bytes)
-            printf("%*d ", intlen(items[TOTAL][BYTES]), items[TOTAL][BYTES]);
-        if (mode_mllen)
-            printf("%*d ", intlen(items[TOTAL][MLLEN]), items[TOTAL][MLLEN]);
-        printf("total\n");
-    }
+    print_results(list, items, count);
     for (int i = 0; i < count; i++) {
         free(items[i]);
     }
@@ -159,7 +178,7 @@ void wc(char **list, int count) {
 int main(int argc, char **argv) {
     int opt, option_index;
     char *list[2];
-    char *mode_total;
+    char *totalarg = "";
     // short_options = "c,    m,    l,    L,                                 w"
     // long_options  = "bytes,chars,lines,max-line-length,total,help,version,words"
     while ((opt = getopt_long(argc, argv, "cmlLwhv", long_options, &option_index)) != -1) {
@@ -184,13 +203,29 @@ int main(int argc, char **argv) {
                 break;
             case 1000:
                 // auto, always, only, never
-                mode_total = optarg;
+                if (strcmp(optarg, "auto") == 0 ||
+                        strcmp(optarg, "always") == 0 ||
+                        strcmp(optarg, "only") == 0 ||
+                        strcmp(optarg, "never") == 0) {
+                    totalarg = optarg;
+                } else {
+                    fprintf(stderr, "Erro: argumento inválido para --total: \"%s\"\n", optarg);
+                    fprintf(stderr, "Valores permitidos: auto, always, only, never\n");
+                    exit(EXIT_FAILURE);
+                }
                 break;
             case 'h':
-                printf("help\n");
+                printf("Uso: %s [OPÇÕES] [ARQUIVOS...]\n", argv[0]);
+                printf("  -l, --lines             Conta linhas\n");
+                printf("  -w, --words             Conta palavras\n");
+                printf("  -c, --bytes             Conta bytes\n");
+                printf("  -m, --chars             Conta caracteres\n");
+                printf("  -L, --max-line-length   Comprimento máximo de linha\n");
+                printf("  -h, --help              Exibe esta ajuda\n");
+                printf("  -v, --version           Exibe a versão\n");
                 exit(EXIT_SUCCESS);
             case 'v':
-                printf("version\n");
+                printf("wc clone %s\n", VERSION);
                 exit(EXIT_SUCCESS);
             default:
                 abort();
@@ -202,11 +237,17 @@ int main(int argc, char **argv) {
         mode_lines = true;
         mode_words = true;
     }
-    if (argc < 2) {
+    optind--;
+    if (((strcmp(totalarg, "") == 0 || strcmp(totalarg, "auto") == 0) && (argc - optind) > 2)
+            || strcmp(totalarg, "always") == 0)
+        mode_total = true;
+    // else if (strcmp(totalarg, "never") == 0)
+    //     mode_total = false;
+    /*  Ler de stdin ou argumentos */
+    if ((argc - optind) < 2) {
         list[1] = "/dev/stdin";
         wc(list, 2);
     } else {
-        optind--;
         wc(argv + optind, argc - optind);
     }
     return EXIT_SUCCESS;
